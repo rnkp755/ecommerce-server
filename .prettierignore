@@ -1,0 +1,26 @@
+# Ignore node_modules directory
+/node_modules
+
+# Ignore build output directory
+./dist
+
+# Ignore logs directory
+logs
+
+# Ignore coverage reports directory
+coverage
+
+# Ignore any files starting with a dot
+.*
+
+# Ignore any files ending with a tilde (~)
+*~
+
+# Ignore any files ending with a hash (#)
+*#
+
+# Ignore any files ending with a dollar sign ($)
+*$
+
+# Ignore any files ending with a .log extension
+*.log
