@@ -6,13 +6,14 @@ import { Address } from '../models/address.model.js'
 
 const addNewAddress = asyncHandler(async (req, res) => {
       const userId = req.user?._id;
-      if (!userId.trim()) throw new APIError(401, "Unauthorized Access")
+      if (!userId) throw new APIError(401, "Unauthorized Access")
 
       const { name, phone, pincode, landmark, address, city, state, country } = req.body
       if (
-            [name, phone, pincode, address, city, state, country].includes(undefined) || [name, phone, pincode, address, city, state, country].trim().includes("")
+            [name, phone, pincode, address, city, state].includes(undefined) ||
+            [name, phone, pincode, address, city, state].some((field) => !field || field.trim() === "")
       ) {
-            throw new APIError(400, "Please provide all the required fields")
+            throw new APIError(400, "Please provide all the required fields");
       }
 
       const user = await User.findById(userId)
@@ -28,8 +29,11 @@ const addNewAddress = asyncHandler(async (req, res) => {
             address,
             city,
             state,
-            country
+            country: country || "India"
       })
+
+      user.address.push(newAddress._id);
+      await user.save({ validateBeforeSave: false });
 
       return res
             .status(200)

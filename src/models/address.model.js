@@ -31,7 +31,6 @@ const addressSchema = new Schema({
       landmark: {
             type: String,
             trim: true,
-            minLength: [3, "Locality must be at least 3 characters long"]
       },
       address: {
             type: String,
@@ -59,3 +58,5 @@ const addressSchema = new Schema({
             defauult: "India"
       }
 }, { timestamps: true })
+
+export const Address = mongoose.model('Address', addressSchema);

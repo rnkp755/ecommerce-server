@@ -9,9 +9,10 @@ const addProduct = asyncHandler(async (req, res, next) => {
       const { name, description, price, category, suitableFor } = req.body
 
       if (
-            [name, description, price, category,].includes(undefined) || [name, description, price, category].trim().includes("")
+            [name, description, price].includes(undefined) ||
+            [name, description, price].some((field) => !field || field.trim() === "")
       ) {
-            throw new APIError(400, "Please provide all the required fields")
+            throw new APIError(400, "Please provide all the required fields");
       }
 
       if (price < 10) throw new APIError(400, "Price must be at least 10")
@@ -20,22 +21,22 @@ const addProduct = asyncHandler(async (req, res, next) => {
 
       const display = []
       for (const imageLocalPath of req.files.productImages) {
-            const image = await uploadOnCloudinary(imageLocalPath)
+            const image = await uploadOnCloudinary(imageLocalPath.path)
             if (!image?.url) throw new APIError(500, "Error while uploading Image on Database")
             display.push(image.url)
       }
 
       if (req.files.productVideo) {
-            const video = await uploadOnCloudinary(req.files.productVideo[0])
+            const video = await uploadOnCloudinary(req.files.productVideo[0].path)
             if (!video?.url) throw new APIError(500, "Error while uploading Video on Database")
             display.push(video.url)
       }
 
-      const newProduct = new Product({
+      const newProduct = await Product.create({
             name,
             description,
             price,
-            category,
+            category: category || "Others",
             suitableFor: suitableFor || "Unisex",
             display
       })
@@ -52,7 +53,10 @@ const toggleProductStock = asyncHandler(async (req, res, next) => {
       const { productId } = req.body;
       if (!productId) throw new APIError(400, "Please provide a product ID")
 
-      const product = await Product.findByIdAndUpdate(
+      const product = await Product.findById(productId)
+      if (!product) throw new APIError(404, "Product not found")
+
+      const updatedProduct = await Product.findByIdAndUpdate(
             productId,
             {
                   $set: {
@@ -63,11 +67,11 @@ const toggleProductStock = asyncHandler(async (req, res, next) => {
                   new: true
             }
       )
-      if (!product) throw new APIError(404, "Product not found")
+      if (!updatedProduct) throw new APIError(404, "SOmething went wrong while updating product stock")
 
       return res
             .status(200)
-            .json(new APIResponse(200, product, "Product stock updated successfully"))
+            .json(new APIResponse(200, updatedProduct, "Product stock updated successfully"))
 })
 
 const updateProduct = asyncHandler(async (req, res, next) => {
@@ -78,7 +82,10 @@ const updateProduct = asyncHandler(async (req, res, next) => {
 
       if (!name && !description && !price && !category && !suitableFor) throw new APIError(400, "Please provide at least one field to update")
 
-      const product = await Product.findByIdAndUpdate(
+      const product = await Product.findById(productId)
+      if (!product) throw new APIError(404, "Product not found")
+
+      const updatedProduct = await Product.findByIdAndUpdate(
             productId,
             {
                   $set: {
@@ -93,11 +100,11 @@ const updateProduct = asyncHandler(async (req, res, next) => {
                   new: true
             }
       )
-      if (!product) throw new APIError(404, "Product not found")
+      if (!updatedProduct) throw new APIError(404, "Something went wrong while updating product details")
 
       return res
             .status(200)
-            .json(new APIResponse(200, product, "Product updated successfully"))
+            .json(new APIResponse(200, updatedProduct, "Product updated successfully"))
 })
 
 const deleteProduct = asyncHandler(async (req, res, next) => {
@@ -115,27 +122,40 @@ const deleteProduct = asyncHandler(async (req, res, next) => {
 })
 
 const fetchProducts = asyncHandler(async (req, res, next) => {
-      const { page, limit, category, suitableFor, inStock } = req.query
-      const query = {}
-      if (category) query.category = category
-      if (suitableFor) query.suitableFor = suitableFor
-      if (inStock) query.inStock = inStock
+      const { page, limit, category, suitableFor, inStock, sortBy, sortOrder } = req.query;
 
-      const products = await Product.aggregatePaginate(
-            Product.aggregate([
-                  {
-                        $match: query
-                  }
-            ]),
-            {
-                  page: page || 1,
-                  limit: limit || 10
-            }
-      )
+      const query = {};
+      if (category) query.category = category;
+      if (suitableFor) query.suitableFor = suitableFor;
+      if (inStock) query.inStock = inStock;
+
+      const sortOptions = {};
+
+      if (sortBy) {
+            // Use a dynamic approach for sorting based on the specified field
+            sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+      } else {
+            // Default sorting by createdAt in descending order if not specified
+            sortOptions.createdAt = -1;
+      }
+
+      const aggregationPipeline = [
+            { $match: query },
+            { $sort: sortOptions },
+      ];
+
+      const options = {
+            page: page || 1,
+            limit: limit || 10,
+      };
+
+      const products = await Product.aggregatePaginate(aggregationPipeline, options);
+
       return res
             .status(200)
-            .json(new APIResponse(200, products, "Products fetched successfully"))
-})
+            .json(new APIResponse(200, products, "Products fetched successfully"));
+});
+
 
 const fetchProduct = asyncHandler(async (req, res, next) => {
       const { productId } = req.params
@@ -164,6 +184,7 @@ const searchProducts = asyncHandler(async (req, res, next) => {
             .status(200)
             .json(new APIResponse(200, products, "Products searched successfully"))
 })
+
 
 const rateProduct = asyncHandler(async (req, res, next) => {
       if (!req.user) throw new APIError(403, 'You must be logged in to rate a product')

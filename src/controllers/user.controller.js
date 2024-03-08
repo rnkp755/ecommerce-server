@@ -57,13 +57,15 @@ const updateMembershipStatus = async (userId) => {
 };
 
 const registerUser = asyncHandler(async (req, res) => {
-      const { username, email, fullName, password, phone } = req.body
+      const { username, email, fullName, password, phone } = req.body;
+
       if (
-            [username, email, fullName, password, phone].includes(undefined) || [username, email, fullName, password, phone].trim().includes("")
+            [username, email, fullName, password, phone].includes(undefined) ||
+            [username, email, fullName, password, phone].some((field) => !field || field.trim() === "")
       ) {
-            throw new APIError(400, "Please provide all the required fields")
+            throw new APIError(400, "Please provide all the required fields");
       }
-      // Other Validations
+
 
       const existedUser = await User.findOne({
             $or: [
@@ -128,6 +130,7 @@ const loginUser = asyncHandler(async (req, res) => {
       delete loggedInUser['createdAt']
       delete loggedInUser['updatedAt']
       delete loggedInUser['__v']
+      delete loggedInUser['role']
 
       console.log(loggedInUser);
 
@@ -144,7 +147,7 @@ const loginUser = asyncHandler(async (req, res) => {
                   new APIResponse(
                         200,
                         {
-                              user
+                              loggedInUser
                         },
                         "User logged in successfully"
                   )
@@ -152,8 +155,6 @@ const loginUser = asyncHandler(async (req, res) => {
 })
 
 const logoutUser = asyncHandler(async (req, res) => {
-      console.log("Logout ", req.user._id);
-      // Output : Logout  undefined
       const user = await User.findByIdAndUpdate(
             req.user._id,
             {
@@ -203,8 +204,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       if (incomingRefreshToken !== user?.refreshToken) throw new APIError(401, "Refesh Token Invalid or Expired")
 
       try {
-            const { newAccessToken, newRefreshToken } = await generateAccessAndRefreshTokens(user._id)
-            console.log("New Access Token", newAccessToken);
+            const tokens = await generateAccessAndRefreshTokens(user._id)
+            console.log("New Access Token", tokens.accessToken);
 
             const options = {
                   httpOnly: true,
@@ -213,8 +214,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
             return res
                   .status(200)
-                  .cookie("accessToken", newAccessToken, options)
-                  .cookie("refreshToken", newRefreshToken, options)
+                  .cookie("accessToken", tokens.accessToken, options)
+                  .cookie("refreshToken", tokens.refreshToken, options)
                   .json(
                         new APIResponse(
                               200,
@@ -229,8 +230,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
                                     cart: user.cart,
                                     membershipStatus: user.membershipStatus,
                                     affilateCode: user.affilateCode,
-                                    accessToken: newAccessToken,
-                                    refreshToken: newRefreshToken
+                                    accessToken: tokens.accessToken,
+                                    refreshToken: tokens.refreshToken
                               },
                               "Session restored Successfully"
                         )
@@ -256,7 +257,7 @@ const changeUserPassword = asyncHandler(async (req, res) => {
 })
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
-      const avatarLocalPath = req.file?.avatar;
+      const avatarLocalPath = req.file?.path;
 
       if (!avatarLocalPath) throw new APIError(401, "Avatar file not found")
 
@@ -288,9 +289,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 })
 
 const getMyProfile = asyncHandler(async (req, res) => {
-      const { userId } = req.user._id
+      const userId = req.user?._id
 
-      if (!userId?.trim()) throw new APIError(404, "User doesn't exist")
+      if (!userId) throw new APIError(404, "User doesn't exist")
 
       const user = await User.aggregate([
             {
@@ -308,7 +309,7 @@ const getMyProfile = asyncHandler(async (req, res) => {
             },
             {
                   $addFields: {
-                        myOrders,
+                        myOrders: "$myOrders",
                         ordersCount: {
                               $size: "$myOrders"
                         }
@@ -342,7 +343,7 @@ const getMyProfile = asyncHandler(async (req, res) => {
 
 const registerForAffilate = asyncHandler(async (req, res) => {
       const userId = req.user?._id;
-      if (!userId.trim()) throw new APIError(401, "Unauthorized Access")
+      if (!userId) throw new APIError(401, "Unauthorized Access")
 
       const user = await User.findById(userId)
       if (!user) throw new APIError(401, "User doesn't exist")
@@ -370,7 +371,7 @@ const registerForAffilate = asyncHandler(async (req, res) => {
 
       return res
             .status(200)
-            .json(new APIResponse(200, user, "Registered for Affilate Successfully"))
+            .json(new APIResponse(200, updatedUser, "Registered for Affilate Successfully"))
 })
 
 const addToWishlist = asyncHandler(async (req, res) => {
@@ -553,17 +554,17 @@ const getUserDetails = asyncHandler(async (req, res) => {
       if (!req.admin) throw new APIError(401, "Unauthorized access")
 
       const { userIdentity } = req.body;
-      if (!userIdentity.trim()) throw new APIError(400, "User Identity is required")
+      if (!userIdentity || !userIdentity.trim()) throw new APIError(400, "User Identity is required")
 
       let user;
-      if (userIdentity.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      if (userIdentity.trim().match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
             user = await User.findOne({ email: userIdentity.toLowerCase() }).select(
                   "-password -cart -wishlist -refreshToken -__v -createdAt -updatedAt"
             )
             if (!user) throw new APIError(404, "User doesn't exist")
       }
-      else if (userIdentity.match(/^[0-9]{10}$/)) {
-            user = await User.findOne({ phone }).select(
+      else if (userIdentity.trim().match(/^[0-9]{10}$/)) {
+            user = await User.findOne({ phone: userIdentity.trim() }).select(
                   "-password -cart -wishlist -refreshToken -__v -createdAt -updatedAt"
             )
             if (!user) throw new APIError(404, "User doesn't exist")

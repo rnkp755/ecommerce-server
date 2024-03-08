@@ -75,12 +75,23 @@ const fetchOrders = asyncHandler(async (req, res, next) => {
 
       // Admin Previlage
       if (user.role === "admin") {
-            const { customerId } = req.body
-            if (customerId) {
-                  matchOptions.customer = customerId
+            const { customerDetail } = req.body
+            if (!customerDetail) delete matchOptions.customer;
+
+            else if (customerDetail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+                  const customer = await User.findOne({ email: customerDetail }).select('_id')
+                  if (!customer) throw new APIError(404, 'No customer found with the provided email')
+                  matchOptions.customer = customer._id
+            }
+            else if (customerDetail.match(/^[0-9]{10}$/)) {
+                  const customer = await User.findOne({ phone: customerDetail }).select('_id')
+                  if (!customer) throw new APIError(404, 'No customer found with the provided phone number')
+                  matchOptions.customer = customer._id
             }
             else {
-                  delete matchOptions.customer
+                  const customer = await User.findOne({ username: customerDetail.toLowerCase() }).select('_id')
+                  if (!customer) throw new APIError(404, 'No customer found with the provided username')
+                  matchOptions.customer = customer._id
             }
       }
 

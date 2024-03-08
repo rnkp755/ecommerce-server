@@ -3,10 +3,10 @@ import { APIError } from "../utils/apiError.js"
 
 export const verifyAdmin = async (req, res, next) => {
       try {
-            const userId = req.user._id
+            const userId = req.user?._id
 
-            const userRole = await User.findById(userId).select("role")
-            if (userRole !== "admin") {
+            const user = await User.findById(userId)
+            if (user.role !== "admin") {
                   throw new APIError(401, "Unauthorized access")
             }
             req.admin = true;

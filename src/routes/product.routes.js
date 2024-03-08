@@ -9,7 +9,7 @@ import {
       searchProducts,
       rateProduct,
       getRelatedProducts
-} from "../controllers/user.controller.js";
+} from "../controllers/product.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/admin.middleware.js";
@@ -29,7 +29,7 @@ router.route("/toggle-stock").patch(verifyJWT, verifyAdmin, toggleProductStock);
 router.route("/update-product").patch(verifyJWT, verifyAdmin, updateProduct);
 router.route("/delete-product").delete(verifyJWT, verifyAdmin, deleteProduct);
 router.route("/fetch-products").get(fetchProducts);
-router.route("/product/:productId").get(fetchProduct);
+router.route("/:productId").get(fetchProduct);
 router.route("/search-products").get(searchProducts);
 router.route("/rate-product").post(verifyJWT, rateProduct);
 router.route("/related-products/:productId").get(getRelatedProducts);
