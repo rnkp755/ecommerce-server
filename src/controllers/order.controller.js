@@ -50,19 +50,57 @@ const addOrder = asyncHandler(async (req, res, next) => {
 })
 
 const fetchOrders = asyncHandler(async (req, res, next) => {
-      const userId = req.user._id
-      if (!userId) throw new APIError(403, 'You are not authorized to access this route')
+      const userId = req.user._id;
+      if (!userId) throw new APIError(403, 'You are not authorized to access this route');
 
-      const user = await User.findById(userId)
-      if (!user) throw new APIError(404, 'Unauthorized access')
+      const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc', status, paymentMode } = req.query;
 
-      const orders = await Order.find({ customer: userId })
-      if (!orders) throw new APIResponse(200, "You don't have any orders yet")
+      const sortOptions = {};
+      sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+      const matchOptions = {
+            customer: userId,
+      };
+
+      if (status) {
+            matchOptions.status = status;
+      }
+
+      if (paymentMode) {
+            matchOptions.paymentMode = paymentMode;
+      }
+
+      const user = await User.findById(userId);
+      if (!user) throw new APIError(404, 'Unauthorized access');
+
+      // Admin Previlage
+      if (user.role === "admin") {
+            const { customerId } = req.body
+            if (customerId) {
+                  matchOptions.customer = customerId
+            }
+            else {
+                  delete matchOptions.customer
+            }
+      }
+
+      const orders = await Order.aggregate([
+            { $match: matchOptions },
+            { $sort: sortOptions },
+            { $skip: (page - 1) * limit },
+            { $limit: parseInt(limit) },
+      ]);
+
+      if (!orders || orders.length === 0) {
+            return res
+                  .status(200)
+                  .json(new APIResponse(200, [], "No orders found for the specified criteria"));
+      }
 
       return res
             .status(200)
-            .json(new APIResponse(200, orders, "Orders fetched Successfully"))
-})
+            .json(new APIResponse(200, orders, "Orders fetched Successfully"));
+});
 
 const fetchOrder = asyncHandler(async (req, res, next) => {
       const userId = req.user._id
@@ -75,7 +113,7 @@ const fetchOrder = asyncHandler(async (req, res, next) => {
       if (!orderId) throw new APIError(400, "Please provide Order Id")
 
       // Admin Previlage
-      if (req.admin) {
+      if (user.role === "admin") {
             const order = await Order.findById(orderId)
             if (!order) throw new APIError(404, "Error while fetching order details")
             return res
@@ -101,8 +139,11 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
       const { orderId } = req.params
       if (!orderId) throw new APIError(400, "Please provide Order Id")
 
+      const user = await User.findById(userId)
+      if (!user) throw new APIError(404, 'Unauthorized access')
+
       // Admin Previlage
-      if (req.admin) {
+      if (user.role === "admin") {
             const order = await Order.findById(orderId)
             if (!order) throw new APIError(404, "Error while fetching order details")
             if (order.status === "Cancelled") throw new APIError(400, "Order already cancelled")
@@ -149,9 +190,37 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
             .json(new APIResponse(200, updatedOrder, "Order Cancelled Successfully"))
 })
 
+const updateOrderStatus = asyncHandler(async (req, res, next) => {
+      if (!req.admin) throw new APIError(403, 'You are not authorized to access this route')
+
+      const { orderId } = req.params
+      if (!orderId) throw new APIError(400, "Please provide Order Id")
+
+      const { status } = req.body
+      if (!status) throw new APIError(400, "Please provide Order Status")
+
+      const updatedOrder = await Order.findByIdAndUpdate(
+            orderId,
+            {
+                  status
+            },
+            {
+                  new: true,
+                  runValidators: true
+            }
+      )
+      if (!updatedOrder) throw new APIError(404, "Error while fetching order details")
+
+      return res
+            .status(200)
+            .json(new APIResponse(200, updatedOrder, "Order Status Updated Successfully by Admin"))
+
+})
+
 export {
       addOrder,
       fetchOrders,
       fetchOrder,
-      cancelOrder
+      cancelOrder,
+      updateOrderStatus
 }

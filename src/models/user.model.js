@@ -55,6 +55,10 @@ const userSchema = new Schema({
             type: Number,
             default: 0
       },
+      redeemableWalletBalance: {
+            type: Number,
+            default: 0
+      },
       wishlist: [
             {
                   type: Schema.Types.ObjectId,
