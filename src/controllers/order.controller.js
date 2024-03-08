@@ -4,21 +4,33 @@ import { APIResponse } from '../utils/APIResponse.js'
 import { Product } from '../models/product.model.js'
 import { Order } from '../models/order.model.js'
 import { User } from '../models/user.model.js'
+import { calculateCartTotal } from './user.controller.js'
+import { instance } from "../index.js"
+import crypto from 'crypto'
+import { Address } from '../models/address.model.js'
+import { Affilate } from '../models/affilate.model.js'
 
-const addOrder = asyncHandler(async (req, res, next) => {
+const checkout = asyncHandler(async (req, res, next) => {
       const userId = req.user._id
       if (!userId) throw new APIError(403, 'You are not authorized to access this route')
 
       const user = await User.findById(userId)
       if (!user) throw new APIError(404, 'Unauthorized access')
 
-      const { product, addressId, orderValue, paymentMode } = req.body
+      const product = user.cart;
+      if (!product || product.length === 0) throw new APIError(400, "No products available in cart")
+
+      const { addressId, paymentMode } = req.body
 
       if (
-            [product, addressId, orderValue, paymentMode].includes(undefined) || [product, addressId, orderValue, paymentMode].trim().includes("")
+            [addressId, paymentMode].includes(undefined) ||
+            [addressId, paymentMode].some((field) => !field || field.trim() === "")
       ) {
-            throw new APIError(400, "Please provide all the required fields")
+            throw new APIError(400, "Please provide all the required fields");
       }
+
+      const address = await Address.findById(addressId)
+      if (!address || !address.user.equals(userId)) throw new APIError(404, "Please provide a valid address")
 
       const productDetails = await Promise.all(
             product.map(async (item) => {
@@ -35,18 +47,88 @@ const addOrder = asyncHandler(async (req, res, next) => {
 
       if (filteredProducts.length === 0) throw new APIError(400, "No products available in stock")
 
+      let affilateByFromCookie = req.cookies?.affilatedBy;
+      const affilatedBy = await User.findById(affilateByFromCookie);
+      console.log(affilatedBy);
+
+      const amounts = await calculateCartTotal(userId, affilatedBy?._id || null);
+      const options = {
+            amount: amounts['payableAmount'] * 100,
+            currency: "INR",
+            receipt: userId.toString() + Date.now().toString(),
+            notes: {
+                  affilatedBy: affilatedBy?._id || null
+            }
+      }
+      const order = await instance.orders.create(options);
+
+      if (order.error) {
+            throw new APIError(400, "Error while creating order", order.error)
+      }
 
       const newOrder = await Order.create({
-            customer: req.user._id,
-            product: filteredProducts,
-            addressId,
-            orderValue,
-            paymentMode
+            customer: userId,
+            product: filteredProducts,      // filteredProducts,
+            address: addressId,      // addressId,
+            orderValue: amounts.payableAmount,
+            paymentMode: paymentMode || "Cash on delivery",
+            paymentStatus: "Pending",
+            razorpay_order_id: order.id,
+            affilatedBy: order.notes.affilatedBy
       })
 
       return res
             .status(201)
             .json(new APIResponse(201, newOrder, "Order added successfully"))
+
+})
+
+const paymentVerification = asyncHandler(async (req, res, next) => {
+      const userId = req.user._id
+      if (!userId) throw new APIError(403, 'You are not authorized to access this route')
+
+      const user = await User.findById(userId)
+      if (!user) throw new APIError(404, 'Unauthorized access')
+
+      const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body
+
+      const order = await Order.findOne({ razorpay_order_id });
+      order.razorpay_payment_id = razorpay_payment_id;
+      order.razorpay_signature = razorpay_signature;
+      await order.save({ validateBeforeSave: false });
+
+      const body = razorpay_order_id + "|" + razorpay_payment_id;
+      const expectedSignature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET).update(body).digest('hex');
+      const isSignatureValid = expectedSignature === razorpay_signature;
+      if (!isSignatureValid) throw new APIError(400, "Payment verification failed. Please try again.")
+
+      const updatedOrder = await Order.findByIdAndUpdate(
+            order._id,
+            {
+                  paymentStatus: isSignatureValid ? "Success" : "Failed"
+            },
+            {
+                  new: true,
+                  runValidators: true
+            }
+      )
+      if (!updatedOrder) throw new APIError(404, "Error while updating payment status")
+
+      user.cart = [];
+      await user.save({ validateBeforeSave: false });
+
+      if (updatedOrder.affilatedBy) {
+            const affilateData = await Affilate.create({
+                  affilatedFrom: updatedOrder.affilatedBy,
+                  affilatedTo: userId,
+                  order: updatedOrder._id,
+                  reward: updatedOrder.orderValue * 0.01
+            })
+      }
+
+      return res
+            .status(201)
+            .json(new APIResponse(201, updatedOrder, "Order added successfully"))
 })
 
 const fetchOrders = asyncHandler(async (req, res, next) => {
@@ -222,6 +304,44 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
       )
       if (!updatedOrder) throw new APIError(404, "Error while fetching order details")
 
+      if (status === "Delivered") {
+            const user = await User.findById(updatedOrder.customer)
+            // Update wallet balance
+            if (user.membershipStatus === "Silver") {
+                  user.boundedWalletBalance.push({
+                        amount: Math.floor(updatedOrder.orderValue * 0.03)
+                  });
+            }
+            else if (user.membershipStatus === "Silver") {
+                  user.boundedWalletBalance.push({
+                        amount: Math.floor(updatedOrder.orderValue * 0.06)
+                  });
+            }
+            else {
+                  user.boundedWalletBalance.push({
+                        amount: Math.floor(updatedOrder.orderValue * 0.09)
+                  });
+            }
+            // Update membership status and total spent of the user
+            user.totalSpent = user.totalSpent + updatedOrder.orderValue;
+            if (user.totalSpent >= 15000) user.membershipStatus = "Platinum";
+            else if (user.totalSpent >= 5000) user.membershipStatus = "Gold";
+            await user.save({ validateBeforeSave: false });
+
+            // Give commission to affilate
+            const affilate = await Affilate.findOne({ order: orderId });
+            if (affilate) {
+                  const affilatedBy = await User.findById(affilate.affilatedFrom);
+                  user.boundedWalletBalance.push({
+                        amount: affilate.reward
+                  });
+                  await affilatedBy.save({ validateBeforeSave: false });
+
+                  affilate.status = "Credited";
+                  await affilate.save({ validateBeforeSave: false });
+            }
+      }
+
       return res
             .status(200)
             .json(new APIResponse(200, updatedOrder, "Order Status Updated Successfully by Admin"))
@@ -229,7 +349,8 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
 })
 
 export {
-      addOrder,
+      checkout,
+      paymentVerification,
       fetchOrders,
       fetchOrder,
       cancelOrder,

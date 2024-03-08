@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
-      addOrder,
+      checkout,
+      paymentVerification,
       fetchOrders,
       fetchOrder,
       cancelOrder,
@@ -11,10 +12,11 @@ import { verifyAdmin } from "../middlewares/admin.middleware.js";
 
 const router = Router();
 
-router.route("/add-order").post(verifyJWT, addOrder);
+router.route("/checkout").post(verifyJWT, checkout);
+router.route("/verify-payment").post(verifyJWT, paymentVerification);
 router.route("/fetch-orders").get(verifyJWT, fetchOrders);
 router.route("/order/:orderId").get(verifyJWT, fetchOrder);
 router.route("/cancel-order/:orderId").post(verifyJWT, cancelOrder);
-router.route("/update-order-status/:orderId").post(verifyJWT, verifyAdmin, updateOrderStatus);
+router.route("/update-status/:orderId").post(verifyJWT, verifyAdmin, updateOrderStatus);
 
 export default router;

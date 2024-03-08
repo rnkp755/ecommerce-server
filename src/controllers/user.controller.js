@@ -22,7 +22,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
       }
 }
 
-const updateMembershipStatus = async (userId) => {
+export const updateMembershipStatus = async (userId) => {
       if (!userId) throw new APIError(400, "User Id is required");
 
       try {
@@ -53,6 +53,48 @@ const updateMembershipStatus = async (userId) => {
             return user;
       } catch (error) {
             throw new APIError(500, "Something went wrong while updating Membership Status");
+      }
+};
+
+export const calculateCartTotal = async (userId, affilatedBy) => {
+      try {
+            const user = await User.findById(userId);
+
+            if (!user) throw new APIError(500, "Error while fetching Cart Details");
+
+            const cart = user.cart;
+            let amounts = {
+                  totalAmount: 0,
+                  discount: 0,
+                  payableAmount: 0
+            };
+
+            for (const item of cart) {
+                  const product = await Product.findById(item.productId);
+                  if (!product) {
+                        throw new APIError(404, "Product not found in the database");
+                  } else if (product.inStock) {
+                        const itemTotal = item.quantity * product.price;
+                        amounts['totalAmount'] += itemTotal;
+                  }
+            }
+
+            if (affilatedBy) {
+                  amounts.discount = Math.floor(amounts.totalAmount * 0.1);
+                  amounts.payableAmount = amounts.totalAmount - amounts.discount;
+            } else {
+                  amounts.payableAmount = amounts.totalAmount;
+            }
+
+            if (user.walletBalance > 0) {
+                  const extraDiscount = Math.floor(Math.min(user.walletBalance, amounts.totalAmount * 0.1));
+                  amounts.discount += extraDiscount;
+                  amounts.payableAmount -= extraDiscount;
+            }
+
+            return amounts;
+      } catch (error) {
+            throw new APIError(500, "Error while calculating Cart Total");
       }
 };
 
@@ -432,10 +474,10 @@ const removeFromWishlist = asyncHandler(async (req, res) => {
 
 const addToCart = asyncHandler(async (req, res) => {
       const userId = req.user?._id;
-      if (!userId.trim()) throw new APIError(401, "Unauthorized Access")
+      if (!userId) throw new APIError(401, "Unauthorized Access")
 
       const { productId, quantity, size } = req.body
-      if (!productId.trim()) throw new APIError(400, "Product Id is required")
+      if (!productId) throw new APIError(400, "Product Id is required")
 
       const user = await User.findByIdAndUpdate(
             userId,
@@ -460,6 +502,18 @@ const addToCart = asyncHandler(async (req, res) => {
       return res
             .status(200)
             .json(new APIResponse(200, user.cart, "Product added to Cart Successfully"))
+})
+
+const viewCart = asyncHandler(async (req, res) => {
+      const userId = req.user?._id;
+      if (!userId) throw new APIError(401, "Unauthorized Access")
+
+      const userCart = await User.findById(userId).select("cart")
+      if (!userCart) throw new APIError(500, "Error while fetching Cart")
+
+      return res
+            .status(200)
+            .json(new APIResponse(200, userCart.cart, "Cart fetched Successfully"))
 })
 
 const removeFromCart = asyncHandler(async (req, res) => {
@@ -524,32 +578,27 @@ const updateCart = asyncHandler(async (req, res) => {
             .json(new APIResponse(200, user.cart, "Cart updated Successfully"))
 })
 
-const calculateCartTotal = asyncHandler(async (req, res) => {
+const calculateCartValue = asyncHandler(async (req, res) => {
       const userId = req.user?._id;
-      if (!userId.trim()) throw new APIError(401, "Unauthorized Access")
+      if (!userId) throw new APIError(401, "Unauthorized Access")
 
-      const user = await User.findById(userId).select("cart");
+      const { affilateCode } = req.body;
+      const affilatedBy = affilateCode && (await User.findOne({ affilateCode }));
 
-      if (!user) throw new APIError(500, "Error while fetching Cart Details")
+      const amounts = await calculateCartTotal(userId, affilatedBy?._id || null);
+      if (!amounts) throw new APIError(500, "Error while calculating Cart Total")
 
-      const cart = user.cart;
-      let totalAmount = 0;
-
-      for (const item of cart) {
-            const product = await Product.findById(item.productId);
-            if (!product) {
-                  throw new APIError(404, "Product not found in the database");
-            }
-
-            const itemTotal = item.quantity * product.price;
-            totalAmount += itemTotal;
+      const options = {
+            httpOnly: true,
+            secure: true,
+            maxAge: 3600000
       }
 
       return res
             .status(200)
-            .json(new APIResponse(200, totalAmount, "Cart Total Calculated Successfully"))
+            .cookie("affilatedBy", affilatedBy?._id || null, options)
+            .json(new APIResponse(200, amounts, "Cart Total Calculated Successfully"))
 })
-
 const getUserDetails = asyncHandler(async (req, res) => {
       if (!req.admin) throw new APIError(401, "Unauthorized access")
 
@@ -594,9 +643,10 @@ export {
       addToWishlist,
       removeFromWishlist,
       addToCart,
+      viewCart,
       removeFromCart,
       updateCart,
-      calculateCartTotal,
+      calculateCartValue,
       getUserDetails
 
 }

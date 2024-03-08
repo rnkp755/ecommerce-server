@@ -11,9 +11,10 @@ import {
       addToWishlist,
       removeFromWishlist,
       addToCart,
+      viewCart,
       removeFromCart,
       updateCart,
-      calculateCartTotal,
+      calculateCartValue,
       getUserDetails
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -38,9 +39,10 @@ router.route("/register-affilate").post(verifyJWT, registerForAffilate);
 router.route("/add-to-wishlist").post(verifyJWT, addToWishlist);
 router.route("/remove-from-wishlist").post(verifyJWT, removeFromWishlist);
 router.route("/add-to-cart").post(verifyJWT, addToCart);
+router.route("/view-cart").post(verifyJWT, viewCart);
 router.route("/remove-from-cart").post(verifyJWT, removeFromCart);
 router.route("/update-cart").post(verifyJWT, updateCart);
-router.route("/calculate-cart-total").post(verifyJWT, calculateCartTotal);
+router.route("/calculate-cart-value").post(verifyJWT, calculateCartValue);
 router.route("/user-details").get(verifyJWT, verifyAdmin, getUserDetails);
 
 export default router;

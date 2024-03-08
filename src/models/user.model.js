@@ -55,10 +55,18 @@ const userSchema = new Schema({
             type: Number,
             default: 0
       },
-      redeemableWalletBalance: {
-            type: Number,
-            default: 0
-      },
+      boundedWalletBalance: [
+            {
+                  amount: {
+                        type: Number,
+                        required: true
+                  },
+                  creditedOn: {
+                        type: Date,
+                        default: Date.now
+                  }
+            }
+      ],
       wishlist: [
             {
                   type: Schema.Types.ObjectId,

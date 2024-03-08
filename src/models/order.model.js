@@ -40,13 +40,35 @@ const orderSchema = new Schema({
       },
       paymentMode: {
             type: String,
-            enum: ["Cash on delivery", "Credit/Debit card", "Net banking", "UPI", "Wallet"],
+            enum: ["Cash on delivery", "Online"],
             default: "Cash on delivery"
+      },
+      paymentStatus: {
+            type: String,
+            enum: ["Pending", "Success", "Failed"],
+            default: "Pending"
+      },
+      razorpay_payment_id: {
+            type: String,
+            default: ""
+      },
+      razorpay_order_id: {
+            type: String,
+            default: ""
+      },
+      razorpay_signature: {
+            type: String,
+            default: ""
       },
       status: {
             type: String,
             enum: ["Pending", "Ordered", "Shipped", "Out for delivery", "Delivered", "Cancelled"],
             default: "Pending"
+      },
+      affilatedBy: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            default: null
       }
 }, { timestamps: true })
 
