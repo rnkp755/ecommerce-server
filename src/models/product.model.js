@@ -22,6 +22,10 @@ const productSchema = new Schema({
             enum: ["Necklace", "Ear-ring", "Perfume", "Clothes", "Shoes", "Bags", "Watches", "Glasses", "Hats", "Socks", "Others"],
             default: "Others"
       },
+      inStock: {
+            type: Boolean,
+            default: true
+      },
       suitableFor: {
             type: String,
             enum: ["Male", "Female", "Unisex"],
@@ -33,6 +37,24 @@ const productSchema = new Schema({
                   required: true
             }
       ],
+      ratings: [
+            {
+                  star: {
+                        type: Number,
+                        required: true,
+                        min: 1,
+                        max: 5
+                  },
+                  review: {
+                        type: String,
+                        trim: true
+                  },
+                  user: {
+                        type: Schema.Types.ObjectId,
+                        ref: "User"
+                  }
+            }
+      ]
 }, { timestamps: true })
 
 productSchema.plugin(mongooseAggregatePaginate);
