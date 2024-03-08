@@ -8,7 +8,6 @@ import {
       updateUserAvatar,
       getMyProfile,
       registerForAffilate,
-      addNewAddress,
       addToWishlist,
       removeFromWishlist,
       addToCart,
@@ -36,7 +35,6 @@ router.route("/update-avatar")
       )
 router.route("/profile").get(verifyJWT, getMyProfile);
 router.route("/register-affilate").post(verifyJWT, registerForAffilate);
-router.route("/add-new-address").post(verifyJWT, addNewAddress);
 router.route("/add-to-wishlist").post(verifyJWT, addToWishlist);
 router.route("/remove-from-wishlist").post(verifyJWT, removeFromWishlist);
 router.route("/add-to-cart").post(verifyJWT, addToCart);

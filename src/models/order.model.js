@@ -28,10 +28,20 @@ const orderSchema = new Schema({
                   }
             }
       ],
+      address: {
+            type: Schema.Types.ObjectId,
+            ref: "Address",
+            required: true
+      },
       orderValue: {
             type: Number,
             required: true,
             min: [10, "Order Value must be at least 1"]
+      },
+      paymentMode: {
+            type: String,
+            enum: ["Cash on delivery", "Credit/Debit card", "Net banking", "UPI", "Wallet"],
+            default: "Cash on delivery"
       },
       status: {
             type: String,

@@ -29,7 +29,7 @@ router.route("/toggle-stock").patch(verifyJWT, verifyAdmin, toggleProductStock);
 router.route("/update-product").patch(verifyJWT, verifyAdmin, updateProduct);
 router.route("/delete-product").delete(verifyJWT, verifyAdmin, deleteProduct);
 router.route("/fetch-products").get(fetchProducts);
-router.route("/:productId").get(fetchProduct);
+router.route("/product/:productId").get(fetchProduct);
 router.route("/search-products").get(searchProducts);
 router.route("/rate-product").post(verifyJWT, rateProduct);
 router.route("/related-products/:productId").get(getRelatedProducts);

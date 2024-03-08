@@ -373,47 +373,6 @@ const registerForAffilate = asyncHandler(async (req, res) => {
             .json(new APIResponse(200, user, "Registered for Affilate Successfully"))
 })
 
-const addNewAddress = asyncHandler(async (req, res) => {
-      const userId = req.user?._id;
-      if (!userId.trim()) throw new APIError(401, "Unauthorized Access")
-
-      const { name, phone, pincode, landmark, address, city, state, country } = req.body
-      if (
-            [name, phone, pincode, address, city, state, country].includes(undefined) || [name, phone, pincode, address, city, state, country].trim().includes("")
-      ) {
-            throw new APIError(400, "Please provide all the required fields")
-      }
-
-      const user = await User.findByIdAndUpdate(
-            userId,
-            {
-                  $push: {
-                        address: {
-                              name,
-                              phone,
-                              pincode,
-                              landmark: landmark || "",
-                              address,
-                              city,
-                              state,
-                              country: country || "India"
-                        }
-                  }
-            },
-            {
-                  new: true
-            }
-      ).select(
-            "-password -walletBalance -wishlist -cart -membershipStatus -affilateCode -totalSpent -role -refreshToken -__v -createdAt -updatedAt"
-      )
-
-      if (!user) throw new APIError(500, "Error while adding new Address")
-
-      return res
-            .status(200)
-            .json(new APIResponse(200, user, "Address added Successfully"))
-})
-
 const addToWishlist = asyncHandler(async (req, res) => {
       const userId = req.user?._id;
       if (!userId.trim()) throw new APIError(401, "Unauthorized Access")
@@ -631,7 +590,6 @@ export {
       updateUserAvatar,
       getMyProfile,
       registerForAffilate,
-      addNewAddress,
       addToWishlist,
       removeFromWishlist,
       addToCart,
