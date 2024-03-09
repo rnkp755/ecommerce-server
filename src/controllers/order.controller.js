@@ -131,6 +131,11 @@ const paymentVerification = asyncHandler(async (req, res, next) => {
             .json(new APIResponse(201, updatedOrder, "Order added successfully"))
 })
 
+const getRazorPayKey = asyncHandler(async (req, res, next) => {
+      return res
+            .status(200)
+            .json(new APIResponse(200, process.env.RAZORPAY_KEY_ID, "Razorpay Key fetched successfully"))
+});
 const fetchOrders = asyncHandler(async (req, res, next) => {
       const userId = req.user._id;
       if (!userId) throw new APIError(403, 'You are not authorized to access this route');
@@ -343,6 +348,7 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
       }
 
       return res
+
             .status(200)
             .json(new APIResponse(200, updatedOrder, "Order Status Updated Successfully by Admin"))
 
@@ -351,6 +357,7 @@ const updateOrderStatus = asyncHandler(async (req, res, next) => {
 export {
       checkout,
       paymentVerification,
+      getRazorPayKey,
       fetchOrders,
       fetchOrder,
       cancelOrder,
